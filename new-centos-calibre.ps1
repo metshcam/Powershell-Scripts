@@ -110,6 +110,10 @@ if (Test-Path -Path $vmdiskpath){
 ##
 $vmname = Get-VM -Name $machinename
 Set-VM -Name $vmname.Name -CheckpointType Disabled -AutomaticCheckpointsEnabled $false -MemoryMinimumBytes 512MB -MemoryMaximumBytes 2048MB
+
+## Remove SecureBoot
+## Look into: re-enabling SecureBoot
+##
 Set-VMFirmware -VMName $vmname.Name -EnableSecureBoot Off
 
 ## Start VM
@@ -119,6 +123,8 @@ Get-VM -Name $machinename | Start-VM
 ## Wait 10 seconds to ensure VM is booted and ssh responding
 Start-Sleep -Seconds 10
 
+## Get IP and look for port 22
+## 
 $vmIP = (Get-VM -Name $machinename | Select-Object -ExpandProperty NetworkAdapters).IPAddresses[0]
 $vmPort = "22"
 
