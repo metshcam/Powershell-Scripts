@@ -116,9 +116,10 @@ Set-VMFirmware -VMName $vmname.Name -EnableSecureBoot Off
 ##
 Get-VM -Name $machinename | Start-VM
 
-Start-Sleep -Seconds 20
+## Wait 10 seconds to ensure VM is booted and ssh responding
+Start-Sleep -Seconds 10
 
-$vmIP = (get-vm -Name $machinename | Select-Object -ExpandProperty NetworkAdapters).IPAddresses[0]
+$vmIP = (Get-VM -Name $machinename | Select-Object -ExpandProperty NetworkAdapters).IPAddresses[0]
 $vmPort = "22"
 
 do {
