@@ -129,7 +129,7 @@ do {
 
 Write-Host "
 $vmIP is up and running on port $vmPort
-Attempting to connect to server over port 22...
+Attempting to connect to server over port $vmPort...
 "
 Pause
 
