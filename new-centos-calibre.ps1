@@ -108,17 +108,17 @@ if (Test-Path -Path $vmdiskpath){
 
 ## Change VM properties for linux and no checkpoints
 ##
-$vmname = Get-VM -Name *$vmrole
+$vmname = Get-VM -Name $machinename
 Set-VM -Name $vmname.Name -CheckpointType Disabled -AutomaticCheckpointsEnabled $false -MemoryMinimumBytes 512MB -MemoryMaximumBytes 2048MB
 Set-VMFirmware -VMName $vmname.Name -EnableSecureBoot Off
 
 ## Start VM
 ##
-Get-VM -Name *$vmrole | Start-VM
+Get-VM -Name $machinename | Start-VM
 
 Start-Sleep -Seconds 20
 
-$vmIP = (get-vm -Name centos-calibre | Select-Object -ExpandProperty NetworkAdapters).IPAddresses[0]
+$vmIP = (get-vm -Name $machinename | Select-Object -ExpandProperty NetworkAdapters).IPAddresses[0]
 $vmPort = "22"
 
 do {
