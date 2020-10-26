@@ -168,7 +168,7 @@ $sourcepath = (Get-Location).Path
 
 Copy-VMFile -Name $vmname.Name -SourcePath $sourcepath\startup.sh -DestinationPath '/root/hyperv/' -CreateFullPath -FileSource Host
 
-## Harden VM and remove Guest Privs
+## Remove ability to copy from HyperV to VM
 ##
 
 Disable-VMIntegrationService -VMName $vmname.Name -Name 'Guest Service Interface'
