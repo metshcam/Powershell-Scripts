@@ -42,6 +42,7 @@ if (Test-Path -Path $vmdisk_chk){
 }
 
 ## Differencing disk details
+## Initial size should match or be larger than parent disk
 ##
 $vmdiskparams = @{
     ParentPath = "$vmdiskloc$vmparentdisk";
@@ -162,13 +163,13 @@ ssh-keyscan.exe -t rsa $vmIP >> $sshlocation
 
 ## Use guest services to startup script to virtual machine
 ## File must exist in path with .PS1 file
+## Note on CreateFullPath: can only create one folder deep.
 ##
-
 $sourcepath = (Get-Location).Path
+$startupscript = "startup-calibre.sh"
 
-Copy-VMFile -Name $vmname.Name -SourcePath $sourcepath\startup.sh -DestinationPath '/root/hyperv/' -CreateFullPath -FileSource Host
+Copy-VMFile -Name $vmname.Name -SourcePath $sourcepath\$startupscript -DestinationPath '/root/hyperv/' -CreateFullPath -FileSource Host
 
 ## Remove ability to copy from HyperV to VM
 ##
-
 Disable-VMIntegrationService -VMName $vmname.Name -Name 'Guest Service Interface'
