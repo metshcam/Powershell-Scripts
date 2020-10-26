@@ -20,8 +20,8 @@ $vmdiskname = "centos-diff"
 
 ## HyperV Machine and Disk locations
 ## 
-$vmlocation = "C:\hyperv\machines\"
-$vmdiskloc = "C:\hyperv\disks\"
+$vmlocation = "E:\hyperv\machines\"
+$vmdiskloc = "E:\hyperv\disks\"
 
 ## Parent disk must exist
 ##
@@ -108,6 +108,7 @@ Set-VMFirmware -VMName $vmname.Name -EnableSecureBoot Off
 
 ## Enable guest services on VM
 ##
+
 Enable-VMIntegrationService -VMName $vmname.Name -Name 'Guest Service Interface'
 
 ## Start VM
@@ -120,18 +121,11 @@ $vmIP = (Get-VM -Name $vmname.Name | Select-Object -ExpandProperty NetworkAdapte
 $vmSSHPort = "22"
 
 do {
-    Write-Host "Waiting..."
+    Write-Host "Waiting for port $vmSSHPort ..."
     Start-Sleep -Seconds 3
   } until(Test-NetConnection $vmIP -Port $vmSSHPort | Where-Object { $_.TcpTestSucceeded } )
 
-Write-Host "
-
-$vmIP is up and running on port $vmSSHPort
-
-Attempting to connect to server over port $vmSSHPort...
-
-"
-Pause
+Write-Host "$vmIP is up and running on port $vmSSHPort"
 
 ## Needs OpenSSH installed
 ## Powershell: Add-WindowsCapability -Online -Name OpenSSH.Client*
@@ -147,29 +141,29 @@ if (!($sshclient.State -eq 'Installed')){
     Add-WindowsCapability -Online -Name OpenSSH.Client*
 }
 
-## Scan for and accept ssh rsa key for new machine
-##
-$sshlocation = $env:USERPROFILE + '\.ssh\known_hosts'
+## Bug: 
+## Check known_hosts file for non-ascii characters
+## breaks known_hosts file
+## use ssh command instead
+#$sshlocation = $env:USERPROFILE + '\.ssh\known_hosts'
+#ssh-keyscan.exe -t rsa $vmIP >> $sshlocation
 
-Write-Host "
+## Prepare ssh rsa public key to copy over to virtual machine
+## Should exist after installing OpenSSH
+$sshpublocation = $env:USERPROFILE + '\.ssh\id_rsa.pub'
 
-Location of SSH hosts file is:  $sshlocation
+Copy-Item -Path $sshpublocation -Destination $PSScriptRoot\authorized_keys
 
-"
+## Use guest services to copy files to VM
+## Remove authorized_keys file and disable guest services
 
-Pause
-
-ssh-keyscan.exe -t rsa $vmIP >> $sshlocation
-
-## Use guest services to startup script to virtual machine
-## File must exist in path with .PS1 file
-## Note on CreateFullPath: can only create one folder deep.
-##
-$sourcepath = (Get-Location).Path
-$startupscript = "startup-calibre.sh"
-
-Copy-VMFile -Name $vmname.Name -SourcePath $sourcepath\$startupscript -DestinationPath '/root/hyperv/' -CreateFullPath -FileSource Host
-
-## Remove ability to copy from HyperV to VM
-##
+Copy-VMFile -Name $vmname.Name -SourcePath $PSScriptRoot\authorized_keys -DestinationPath '/root/.ssh/' -CreateFullPath -FileSource Host
+Copy-VMFile -Name $vmname.Name -SourcePath $PSScriptRoot\startup.sh -DestinationPath '/root/hyperv/' -CreateFullPath -FileSource Host
+Remove-Item -Path $PSScriptRoot\authorized_keys -Force
 Disable-VMIntegrationService -VMName $vmname.Name -Name 'Guest Service Interface'
+
+## Connect over SSH and run startup script that was copied with Copy-VMFile
+## Auto-accepts ssh key certificate into known_hosts
+##
+
+ssh.exe -oStrictHostKeyChecking=no root@$vmIP "sh -c 'cd /root/hyperv; nohup ./startup.sh > /dev/null 2>&1 &'"
