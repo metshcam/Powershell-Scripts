@@ -1,24 +1,27 @@
+####
+## HyperV + CentOS Server Automation
+## Build a differencing disk, based on a Centos 8 base install.
+####
+
+## Must have an existing Centos8 .VHDX parent disk
+## Must have an existing HyperV Virtual Network (e.g. vBridge)
+##
+$vmparentdisk = "centos8.2-base-parent.vhdx"
+$vmswitchname = "vBridge"
+
 Set-Location $PSScriptRoot
 
 ## Virtual machine details
-##
+## 
 $ostype = "centos"
 $vmrole = "calibre"
 $machinename = "$ostype" + "-" + "$vmrole"
-
-## Virtual environment and locations
-##
-$vmlocation = "E:\hyperv\machines\"
-$vmdiskloc = "E:\hyperv\disks\"
-
-## Virtual switch name
-##
-$vmswitchname = "vBridge"
-
-## Virtual disk details
-##
 $vmdiskname = "centos-diff"
-$vmparentdisk = "centos8.2-base-parent.vhdx"
+
+## HyperV Machine and Disk locations
+## 
+$vmlocation = "C:\hyperv\machines\"
+$vmdiskloc = "C:\hyperv\disks\"
 
 ## Parent disk must exist
 ##
@@ -104,7 +107,6 @@ Set-VMFirmware -VMName $vmname.Name -EnableSecureBoot Off
 
 ## Enable guest services on VM
 ##
-
 Enable-VMIntegrationService -VMName $vmname.Name -Name 'Guest Service Interface'
 
 ## Start VM
@@ -132,7 +134,7 @@ Pause
 
 ## Needs OpenSSH installed
 ## Powershell: Add-WindowsCapability -Online -Name OpenSSH.Client*
-
+##
 $sshclient = Get-WindowsCapability -Online -Name 'OpenSSH.Client*'
 
 if (!($sshclient.State -eq 'Installed')){
@@ -145,6 +147,7 @@ if (!($sshclient.State -eq 'Installed')){
 }
 
 ## Scan for and accept ssh rsa key for new machine
+##
 $sshlocation = $env:USERPROFILE + '\.ssh\known_hosts'
 
 Write-Host "
@@ -157,7 +160,8 @@ Pause
 
 ssh-keyscan.exe -t rsa $vmIP >> $sshlocation
 
-## Use guest services to copy files to VM
+## Use guest services to startup script to virtual machine
+## File must exist in path with .PS1 file
 ##
 
 $sourcepath = (Get-Location).Path
