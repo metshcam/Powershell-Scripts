@@ -1,5 +1,5 @@
 ####
-## HyperV + CentOS Server Automation
+## HyperV - Deploy CentOS Server
 ## Build a differencing disk, based on a Centos 8 base install.
 ####
 
