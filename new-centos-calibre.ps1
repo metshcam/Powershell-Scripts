@@ -27,9 +27,6 @@ if (!(Test-Path -Path $vmdiskloc$vmparentdisk)){
     Pause
     Break
 }
-else {
-    Write-Host $vmparentdisk "exists.  Now checking if the new VM's disk already exists."
-}
 
 ## Check if diff exists
 ##
@@ -39,9 +36,6 @@ if (Test-Path -Path $vmdisk_chk){
     Write-Host $vmdisk_chk "already exists.  Quitting."
     Pause
     Break
-}
-else {
-    Write-Host $vmdisk_chk "does not exist.  Continuing."
 }
 
 ## Differencing disk details
@@ -75,7 +69,6 @@ $vmparams = @{
     Generation = "2";
 }
 
-
 ## Make sure VM doesn't already exist
 ##
 $vm_chk = $machinename
@@ -85,9 +78,6 @@ if (Get-VM -Name $vm_chk -ErrorAction SilentlyContinue) {
     Write-Host $vm_chk "already exists.  Quitting."
     Pause
     Break    
-}
-else {
-    Write-Host $machinename "does not exist.  Moving forward now..."
 }
 
 ## Create virtual machine and use new disk
@@ -108,38 +98,73 @@ if (Test-Path -Path $vmdiskpath){
 
 ## Change VM properties for linux and no checkpoints
 ##
-$vmname = Get-VM -Name $machinename
+$vmname = Get-VM -Name *$vmrole
 Set-VM -Name $vmname.Name -CheckpointType Disabled -AutomaticCheckpointsEnabled $false -MemoryMinimumBytes 512MB -MemoryMaximumBytes 2048MB
-
-## Remove SecureBoot
-## Look into: re-enabling SecureBoot
-##
 Set-VMFirmware -VMName $vmname.Name -EnableSecureBoot Off
+
+## Enable guest services on VM
+##
+
+Enable-VMIntegrationService -VMName $vmname.Name -Name 'Guest Service Interface'
 
 ## Start VM
 ##
-Get-VM -Name $machinename | Start-VM
+Get-VM -Name $vmname.Name | Start-VM
 
-## Wait 10 seconds to ensure VM is booted and ssh responding
-Start-Sleep -Seconds 10
+Start-Sleep -Seconds 20
 
-## Get IP and look for port 22
-## 
-$vmIP = (Get-VM -Name $machinename | Select-Object -ExpandProperty NetworkAdapters).IPAddresses[0]
-$vmPort = "22"
+$vmIP = (Get-VM -Name $vmname.Name | Select-Object -ExpandProperty NetworkAdapters).IPAddresses[0]
+$vmSSHPort = "22"
 
 do {
     Write-Host "Waiting..."
     Start-Sleep -Seconds 3
-  } until(Test-NetConnection $vmIP -Port $vmPort | Where-Object { $_.TcpTestSucceeded } )
+  } until(Test-NetConnection $vmIP -Port $vmSSHPort | Where-Object { $_.TcpTestSucceeded } )
 
 Write-Host "
-$vmIP is up and running on port $vmPort
-Attempting to connect to server over port $vmPort...
+
+$vmIP is up and running on port $vmSSHPort
+
+Attempting to connect to server over port $vmSSHPort...
+
 "
 Pause
 
-## Accept ssh key into wsl2
+## Needs OpenSSH installed
+## Powershell: Add-WindowsCapability -Online -Name OpenSSH.Client*
+
+$sshclient = Get-WindowsCapability -Online -Name 'OpenSSH.Client*'
+
+if (!($sshclient.State -eq 'Installed')){
+    Write-Host "
+    You are about to install.
+    CTRL+C to exit.
+    "
+    Pause
+    Add-WindowsCapability -Online -Name OpenSSH.Client*
+}
+
+## Scan for and accept ssh rsa key for new machine
+$sshlocation = $env:USERPROFILE + '\.ssh\known_hosts'
+
+Write-Host "
+
+Location of SSH hosts file is:  $sshlocation
+
+"
+
+Pause
+
+ssh-keyscan.exe -t rsa $vmIP >> $sshlocation
+
+## Use guest services to copy files to VM
 ##
-##Start-Process "bash.exe" -ArgumentList "-c "
-##ssh ("root@"+$vmIP)
+
+$sourcepath = (Get-Location).Path
+
+Copy-VMFile -Name $vmname.Name -SourcePath $sourcepath\startup.sh -DestinationPath '/root/hyperv/' -CreateFullPath -FileSource Host
+
+## Harden VM and remove Guest Privs
+##
+
+Disable-VMIntegrationService -VMName $vmname.Name -Name 'Guest Service Interface'
