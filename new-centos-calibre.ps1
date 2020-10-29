@@ -14,7 +14,7 @@ Set-Location $PSScriptRoot
 ## Virtual machine details
 ## 
 $ostype = "centos"
-$vmrole = "calibre"
+$vmrole = "insurgencyserver"
 $machinename = "$ostype" + "-" + "$vmrole"
 $vmdiskname = "centos-diff"
 
@@ -108,7 +108,6 @@ Set-VMFirmware -VMName $vmname.Name -EnableSecureBoot Off
 
 ## Enable guest services on VM
 ##
-
 Enable-VMIntegrationService -VMName $vmname.Name -Name 'Guest Service Interface'
 
 ## Start VM
@@ -150,20 +149,22 @@ if (!($sshclient.State -eq 'Installed')){
 
 ## Prepare ssh rsa public key to copy over to virtual machine
 ## Should exist after installing OpenSSH
+##
 $sshpublocation = $env:USERPROFILE + '\.ssh\id_rsa.pub'
 
-Copy-Item -Path $sshpublocation -Destination $PSScriptRoot\authorized_keys
+Copy-Item -Path $sshpublocation -Destination $PSScriptRoot\provisioning_files\authorized_keys
 
-## Use guest services to copy files to VM
+## Use HyperV intergrated guest services to copy SSH authorized_keys to VM
+## 
+Copy-VMFile -Name $vmname.Name -SourcePath $PSScriptRoot\provisioning_files\authorized_keys -DestinationPath '/root/.ssh/' -CreateFullPath -FileSource Host
+Copy-VMFile -Name $vmname.Name -SourcePath $PSScriptRoot\provisioning_files\startup.sh -DestinationPath '/root/hyperv/' -CreateFullPath -FileSource Host
+
 ## Remove authorized_keys file and disable guest services
-
-Copy-VMFile -Name $vmname.Name -SourcePath $PSScriptRoot\authorized_keys -DestinationPath '/root/.ssh/' -CreateFullPath -FileSource Host
-Copy-VMFile -Name $vmname.Name -SourcePath $PSScriptRoot\startup.sh -DestinationPath '/root/hyperv/' -CreateFullPath -FileSource Host
-Remove-Item -Path $PSScriptRoot\authorized_keys -Force
+##
+Remove-Item -Path $PSScriptRoot\provisioning_files\authorized_keys -Force
 Disable-VMIntegrationService -VMName $vmname.Name -Name 'Guest Service Interface'
 
 ## Connect over SSH and run startup script that was copied with Copy-VMFile
 ## Auto-accepts ssh key certificate into known_hosts
 ##
-
 ssh.exe -oStrictHostKeyChecking=no root@$vmIP "sh -c 'cd /root/hyperv; nohup ./startup.sh > /dev/null 2>&1 &'"
