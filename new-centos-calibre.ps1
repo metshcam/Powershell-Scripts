@@ -3,13 +3,13 @@
 ## Build a differencing disk, based on a Centos 8 base install.
 ####
 
+Set-Location $PSScriptRoot
+
 ## Must have an existing Centos8 .VHDX parent disk
 ## Must have an existing HyperV Virtual Network (e.g. vBridge)
 ##
 $vmparentdisk = "centos8.2-base-parent.vhdx"
 $vmswitchname = "vBridge"
-
-Set-Location $PSScriptRoot
 
 ## Virtual machine details
 ## 
