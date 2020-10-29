@@ -116,6 +116,8 @@ Get-VM -Name $vmname.Name | Start-VM
 
 Start-Sleep -Seconds 20
 
+## Wait for SSH to respond/listen on virtual machine
+##
 $vmIP = (Get-VM -Name $vmname.Name | Select-Object -ExpandProperty NetworkAdapters).IPAddresses[0]
 $vmSSHPort = "22"
 
