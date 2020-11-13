@@ -7,14 +7,15 @@ Set-Location $PSScriptRoot
 
 ## Must have an existing Centos8 .VHDX parent disk
 ## Must have an existing HyperV Virtual Network (e.g. vBridge)
-##
+## Virtual machine must be built on a working environment e.g. dhcp/dns
+## 
 $vmparentdisk = "centos8.2-base-parent.vhdx"
 $vmswitchname = "vBridge"
 
 ## Virtual machine details
 ## 
 $ostype = "centos"
-$vmrole = "insurgencyserver"
+$vmrole = "workstation"
 $machinename = "$ostype" + "-" + "$vmrole"
 $vmdiskname = "centos-diff"
 
@@ -31,7 +32,7 @@ if (!(Test-Path -Path $vmdiskloc$vmparentdisk)){
     Break
 }
 
-## Check if diff exists
+## Check if diff+role exists
 ##
 $vmdisk_chk = "$vmdiskloc$vmdiskname" + "-" + $vmrole + ".vhdx"
 
@@ -50,18 +51,22 @@ $vmdiskparams = @{
     SizeBytes = 40GB;
 }
 
-Write-Host "About to create disk with following parameters..."
+Write-Host "About to create differencing disk with following parameters..."
 Write-Host @vmdiskparams
 
+## Remove pause when done testing
+##
 Pause
 
+## Create new differencing virtual disk
+##
 New-VHD @vmdiskparams -Differencing
 
 ## Assign the current disk to assign to the virtual machine
 ##
 $vhdpath = (Get-ChildItem -Path $vmdiskloc$vmdiskname* -Filter *$vmrole*)
 
-## Virtual machine parametere (hyperv)
+## Virtual machine parameters (hyperv)
 ##
 $vmparams = @{
     Name = $machinename;
@@ -73,27 +78,28 @@ $vmparams = @{
     Generation = "2";
 }
 
-## Make sure VM doesn't already exist
+## Make sure virtual machine doesn't currently exist
 ##
 $vm_chk = $machinename
 
 if (Get-VM -Name $vm_chk -ErrorAction SilentlyContinue) {
-    
     Write-Host $vm_chk "already exists.  Quitting."
     Pause
     Break    
 }
 
-## Create virtual machine and use new disk
+## Create virtual machine and attach new differencing disk
 ##
 $vmdiskpath = "$vmdiskloc$vmdiskname" + "-" + $vmrole + ".vhdx"
 
 Write-Host "About to create VM at ..." $vmparams.Path "with the following paramaters..."
 Write-Host @vmparams
 
+## Remove pause when done testing
+##
 Pause
 
-## If diff disk exists, create vm
+## If differencing disk currently exists, create virtual machine
 ##
 if (Test-Path -Path $vmdiskpath){
     Write-Host $vmdiskpath "exists.  Here we goooo..."
@@ -101,28 +107,35 @@ if (Test-Path -Path $vmdiskpath){
 }
 
 ## Change VM properties for linux and no checkpoints
+## Change properties according to your environment
 ##
 $vmname = Get-VM -Name *$vmrole
 Set-VM -Name $vmname.Name -CheckpointType Disabled -AutomaticCheckpointsEnabled $false -MemoryMinimumBytes 512MB -MemoryMaximumBytes 2048MB
 Set-VMFirmware -VMName $vmname.Name -EnableSecureBoot Off
 
 ## Enable guest services on VM
+## The parent disk must have the hyperv kernel module
+## loaded.  Centos8 has it enabled by default.
 ##
 Enable-VMIntegrationService -VMName $vmname.Name -Name 'Guest Service Interface'
 
-## Start VM
-##
+## Start virtual machine, and wait for SSH service to respond
+## 
 Get-VM -Name $vmname.Name | Start-VM
 
+## Wait for machine to start up before it receives an IP from your DHCP server
+## Adjust according to your network environment
+##
 Start-Sleep -Seconds 20
 
-## Wait for SSH to respond/listen on virtual machine
+## This should be your virtual machine's primary IPv4 address
+## These variables may require changes based on your own network configuration
 ##
 $vmIP = (Get-VM -Name $vmname.Name | Select-Object -ExpandProperty NetworkAdapters).IPAddresses[0]
 $vmSSHPort = "22"
 
 do {
-    Write-Host "Waiting for port $vmSSHPort ..."
+    Write-Host "Waiting for SSH on port $vmSSHPort ... on $vmIP"
     Start-Sleep -Seconds 3
   } until(Test-NetConnection $vmIP -Port $vmSSHPort | Where-Object { $_.TcpTestSucceeded } )
 
@@ -135,7 +148,7 @@ $sshclient = Get-WindowsCapability -Online -Name 'OpenSSH.Client*'
 
 if (!($sshclient.State -eq 'Installed')){
     Write-Host "
-    You are about to install.
+    You are about to install OpenSSH (Windows Feature).
     CTRL+C to exit.
     "
     Pause
@@ -143,21 +156,22 @@ if (!($sshclient.State -eq 'Installed')){
 }
 
 ## Bug: 
-## Check known_hosts file for non-ascii characters
-## breaks known_hosts file
-## use ssh command instead
-#$sshlocation = $env:USERPROFILE + '\.ssh\known_hosts'
+## known_hosts file corrupted by ssh-keyscan.exe
+## non-ascii characters
+## use ssh.exe method instead
 #ssh-keyscan.exe -t rsa $vmIP >> $sshlocation
 
-## Prepare ssh rsa public key to copy over to virtual machine
-## Should exist after installing OpenSSH
+## Prepare ssh current user RSA public key
+## Copy to virtual machine using guest services
+## note: RSA key should already exist after installing OpenSSH
 ##
 $sshpublocation = $env:USERPROFILE + '\.ssh\id_rsa.pub'
 
 Copy-Item -Path $sshpublocation -Destination $PSScriptRoot\provisioning_files\authorized_keys
 
-## Use HyperV intergrated guest services to copy SSH authorized_keys to VM
-## 
+## Use HyperV integrated guest services to copy SSH authorized_keys to VM
+## Root user gains access to the host's public key
+##
 Copy-VMFile -Name $vmname.Name -SourcePath $PSScriptRoot\provisioning_files\authorized_keys -DestinationPath '/root/.ssh/' -CreateFullPath -FileSource Host
 Copy-VMFile -Name $vmname.Name -SourcePath $PSScriptRoot\provisioning_files\startup.sh -DestinationPath '/root/hyperv/' -CreateFullPath -FileSource Host
 
