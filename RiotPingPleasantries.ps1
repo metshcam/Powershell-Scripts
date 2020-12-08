@@ -4,6 +4,7 @@ $ipaddr = '192.168.1.1'
 ## Once the IP stops pinging, run actions; in this case
 ## Warn riot that we are going to restart WLAN for her
 ## because the wifi card is problematic
+## CTRL+C to break
 ##
 while ($true) {
     if (Test-NetConnection $ipaddr | Where-Object { $_.PingSucceeded }) {
